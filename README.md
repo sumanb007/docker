@@ -56,11 +56,10 @@ docker run -d -p 5050:5000 --restart unless-stopped --name local-docker-registry
 
 When using images from a **local registry**, there are a few additional considerations to ensure smooth integration with Docker and Kubernetes.
 
-### 1. Insecure Registry Configuration
+### 1. Alternative-1: Insecure Registry Configuration
 
 If your local registry does not use TLS (i.e., it's running over HTTP), you'll need to configure Docker (and Kubernetes nodes if using Docker as the runtime) to trust it as an insecure registry.
 
-### Docker Configuration:
 - **Edit Docker Daemon Configuration**
   Update or create `/etc/docker/daemon.json` on your host (or each Kubernetes node) with the following:
   ```json
@@ -83,7 +82,7 @@ If your local registry does not use TLS (i.e., it's running over HTTP), you'll n
   sudo systemctl restart docker
   ```
 
-### 2. (Alternative to above insecure) Secure Registry Configuration
+### 2. Alternative-2: Secure Registry Configuration
 
 - If you don’t have a certificate from a trusted CA, you can generate a **self-signed certificate** for your registry.
   You need an SSL certificate to enable HTTPS. You can either get one from a trusted CA (Let's Encrypt, etc.) or generate a self-signed certificate.
@@ -98,9 +97,10 @@ If your local registry does not use TLS (i.e., it's running over HTTP), you'll n
    
    This creates:
    
-   domain.key → Private key
-   domain.crt → Self-signed certificate valid for 1 year
-   (Make sure to replace /mnt/sdb2-partition/certs with your preferred location.)
+   - domain.key → Private key
+   - domain.crt → Self-signed certificate valid for 1 year (you may change '-days 1825' for 5 years)
+
+     (Make sure to replace /mnt/sdb2-partition/certs with your preferred location.)
 
 - Run the Secure Docker Registry
   Now, restart the registry with TLS enabled, using the same stored images directory.
@@ -114,22 +114,100 @@ If your local registry does not use TLS (i.e., it's running over HTTP), you'll n
   -e REGISTRY_STORAGE_DELETE_ENABLED=true \
   registry:2
   ```
-   This ensures:
-   
-   The existing images are retained (/mnt/sdb2-partition/dockerImages remains unchanged).
-   The registry now runs with HTTPS instead of HTTP.
-#
-#
-#
-#
-#
-#
-#
+  This ensures:
+  - The existing images are retained (/mnt/sdb2-partition/dockerImages remains unchanged).
+  - The registry now runs with HTTPS instead of HTTP.
+    
+
+### 3. Trust the Registry Certificate (On Clients)
+
+- For Self-Signed Certificates (On Linux)
+
+  In our case, since we switched to HTTPS, clients (your local machine, Kubernetes nodes, etc.) must trust the new certificate.
+
+  ```sh
+  mkdir -p /etc/docker/certs.d/$(hostname -I | awk '{print $1}')
+  cp /mnt/sdb2-partition/certs/domain.crt /etc/docker/certs.d/$(hostname -I | awk '{print $1}')/ca.crt
+  ```
+
+  Then, restart Docker:
+  ```
+  sudo systemctl restart docker
+  ```
+
+  If other machines are accessing the registry, copy domain.crt to each client and install it under /etc/docker/certs.d/<registry-ip>/ca.crt.
+
+  Since our Docker Registry is hosted on 192.168.1.110, and other hosts (192.168.1.11, 192.168.1.12, 192.168.1.13) need to access it securely.
+  Follow these steps to distribute and trust the self-signed certificate on each client machine.
+
+  On the main registry host (192.168.1.110), run:
+
+  ```sh
+  scp /mnt/sdb2-partition/certs/domain.crt user@192.168.1.11:/tmp/
+  scp /mnt/sdb2-partition/certs/domain.crt user@192.168.1.12:/tmp/
+  scp /mnt/sdb2-partition/certs/domain.crt user@192.168.1.13:/tmp/
+  ```
+  (Replace user with your actual username on the target machines.)
+
+  SSH into each client (192.168.1.11, .12, .13) and move the certificate to the correct location:
+
+  ```sh
+  sudo mkdir -p /etc/docker/certs.d/192.168.1.110
+  sudo mv /tmp/domain.crt /etc/docker/certs.d/192.168.1.110/ca.crt
+  sudo systemctl restart docker
+  ```
+
+- Test the Connection
+
+  - To verify that the registry is working, list available repositories before pulling an image.
+
+    ```sh
+    curl -k https://192.168.1.110:5050/v2/_catalog
+    ```
+
+    Expected Output
+    ```sh
+    {"repositories":["frontend-crud-webapp", "backend-crud-webapp"]}
+    ```
+    
+  - To list Tags for a Specific Repository
+
+    ```sh
+    curl -k https://192.168.1.110:5050/v2/frontend-crud-webapp/tags/list
+    ```
+
+    Expected Output
+    ```sh
+    {"name":"frontend-crud-webapp","tags":["v1","v2","latest"]}
+    ```
+
+  - Check If a Specific Image Exists:
+
+    ```sh
+
+    ```
+
+    If the image exists, it will show as below.
+    ```sh
+    HTTP/2 200
+    content-type: application/vnd.docker.distribution.manifest.v1+prettyjws
+    docker-content-digest: sha256:919d949c1500219df0f03d6203b5f6ca896a11cb4b9bfa2cca3a8c2e775dccb5
+    docker-distribution-api-version: registry/2.0
+    etag: "sha256:919d949c1500219df0f03d6203b5f6ca896a11cb4b9bfa2cca3a8c2e775dccb5"
+    x-content-type-options: nosniff
+    content-length: 15448
+    date: Wed, 12 Mar 2025 11:35:46 GMT
+    ```
+
+    If not,
+    ```sh
+    HTTP/2 404
+    ```
+
+    You can further verify by pulling and pushing new images.
 
 
-
-
-### 2. Further Changes Before Pushing Image
+### 4. Further Changes Before Pushing Image
 
 When preparing to push images to a **local Docker registry**, you need to ensure that your setup is correctly configured and that your images are properly tagged. Here are some important steps:
 
@@ -153,7 +231,7 @@ If your local registry requires authentication, ensure that you:
 - **`Provide the correct username and password when prompted.`**
 
 
-### 3. Verify Network Accessibility
+### 5. Verify Network Accessibility
 
 - **For Docker Clients:**
   Ensure that the registry is accessible over the network at the specified host and port. This is crucial especially if you're pushing from a different machine.
@@ -162,7 +240,7 @@ If your local registry requires authentication, ensure that you:
   Check that DNS resolution or IP addressing is configured correctly and that firewall settings permit traffic on the registry port.
 
 
-### 4. Confirm Persistent Storage and Configuration
+### 6. Confirm Persistent Storage and Configuration
 
 - **Persistent Data:**
 Ensure that the registry container is set up with a volume mount (e.g., -v /mnt/sdb2-partition/dockerImages:/var/lib/registry) so that your images are stored persistently.
@@ -171,7 +249,7 @@ Ensure that the registry container is set up with a volume mount (e.g., -v /mnt/
 If you require additional features like enabling image deletion (-e REGISTRY_STORAGE_DELETE_ENABLED=true), confirm that these are configured correctly in the registry container.
 
 
-### 5. Ensure Network Accessibility
+### 7. Ensure Network Accessibility
 
 - ***For Docker:***
   Ensure the registry is reachable at the specified host and port.
@@ -181,7 +259,7 @@ If you require additional features like enabling image deletion (-e REGISTRY_STO
   - Update your image references accordingly if localhost is not applicable in a multi-node environment.
  
 
-### 6. Image Pull Secrets (If Using Authentication)***
+### 8. Image Pull Secrets (If Using Authentication)***
 
 If you have enabled authentication on your private registry, you need to create a Docker registry secret in Kubernetes to allow pulling images.
 
