@@ -184,7 +184,7 @@ If your local registry does not use TLS (i.e., it's running over HTTP), you'll n
   - Check If a Specific Image Exists:
 
     ```sh
-
+    curl -k -H "Accept: application/vnd.docker.distribution.manifest.v2+json" -I -X GET https://192.168.1.110:5050/v2/backend-crud-webapp/manifests/v1
     ```
 
     If the image exists, it will show as below.
