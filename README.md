@@ -287,6 +287,57 @@ If you have enabled authentication on your private registry, you need to create 
     - name: my-registry-secret
   ```
 
+## Multi Stage Build
+
+A Docker multi-stage build is a technique used to create smaller and more efficient Docker images by using multiple FROM statements in a Dockerfile. This approach allows us to build an application in one stage and copy only the necessary artifacts into a final, minimal image.
+
+### Why Use Multi-Stage Builds?
+- Smaller Image Size 🏋️‍♂️ → Reduces unnecessary dependencies in the final image.
+- Improved Security 🔒 → Minimizes attack surface by removing build tools.
+- Better Performance 🚀 → Less bloat means faster deployment and startup times.
+
+> [!TIP]
+> When to Use Multi-Stage Builds?
+> - When your application requires compilation (Go, C, C++, Java, Rust).
+> - When using package managers (npm, pip, maven) and you don’t need dev (or build tools) dependencies in production.
+> - To leverage(control) Docker layer caching for faster rebuilds.
+> - When you want to create small, optimized images for faster deployment.
+> - Security: Fewer components reduce attack surfaces.
+> - Optimize Dockerfile and keep them easy to read and maintain.
+
+### Let's Continue
+
+Now we have three tier web application, frontend, backend and mongodb.
+We are are converting the traditional Dockerfile into optimized final image using multi-stage build.
+
+Here, we have one Dockerfile for frontend.
+```dockerfile
+FROM 	node:latest
+WORKDIR	/app
+COPY	. .
+RUN	npm i react-bootstrap@next bootstrap@5.1.0 react-router-dom axios formik yup
+EXPOSE	3000
+CMD	npm start
+```
+
+Now lets convert this Dockerfile into multi-stage build.
+```dockerfile
+# Stage 1: Build the React app
+FROM node:16-alpine AS builder
+WORKDIR /frontend
+COPY package*.json ./
+RUN npm ci --silent
+COPY . .
+RUN npm run build  # Assumes "build" script exists in package.json
+
+# Stage 2: Serve with NGINX
+FROM nginx:alpine
+COPY --from=builder /frontend/build /usr/share/nginx/html
+# Custom NGINX config for port 8080 and React routing
+COPY nginx-frontend.conf /etc/nginx/conf.d/default.conf
+# Explicitly expose port 8080 (optional but good practice)
+EXPOSE 8080
+```
 
 
 
