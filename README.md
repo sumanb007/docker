@@ -3,7 +3,7 @@
 ## Table of Contents
 1. [Docker Private Repository](#docker-private-repository)
 2. [Before Pushing Images](#before-pushing-images)
-3. [Multi Stage Build](#multi-stage-build)
+3. [Dockerfile and Multi Stage Build](#dockerfile-and-multi-stage-build)
 
 ## Docker Private Repository
 
@@ -287,7 +287,7 @@ If you have enabled authentication on your private registry, you need to create 
     - name: my-registry-secret
   ```
 
-## Multi Stage Build
+## Dockerfile and Multi Stage Build
 
 A Docker multi-stage build is a technique used to create smaller and more efficient Docker images by using multiple FROM statements in a Dockerfile. This approach allows us to build an application in one stage and copy only the necessary artifacts into a final, minimal image.
 
@@ -311,6 +311,8 @@ Now we have three tier web application, frontend, backend and mongodb.
 We are are converting the traditional Dockerfile into optimized final image using multi-stage build.
 
 Here, we have one Dockerfile for frontend.
+This is not ideal for long-term projects, but it works if you just need to install specific packages without setting up package.json.
+The image created will have ~1.5G size.
 ```dockerfile
 FROM 	node:latest
 WORKDIR	/app
@@ -320,7 +322,19 @@ EXPOSE	3000
 CMD	npm start
 ```
 
-Now lets convert this Dockerfile into multi-stage build.
+Alternatively, we have another ideal Dockerfile. This will create ~434MB size.
+```dockerfile
+FROM node:latest
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+EXPOSE 3000
+CMD ["npm", "start"]
+```
+
+For the frontend, a common practice is to build the application into static files and serve them with a lightweight web server (e.g., Nginx).
+Now lets convert alternative Dockerfile into multi-stage build. This will create ~54MB size.
 ```dockerfile
 # Stage 1: Build the React app
 FROM node:16-alpine AS builder
@@ -332,12 +346,43 @@ RUN npm run build  # Assumes "build" script exists in package.json
 
 # Stage 2: Serve with NGINX
 FROM nginx:alpine
+#Copies only the built files from the first stage to Nginx's HTML directory.
 COPY --from=builder /frontend/build /usr/share/nginx/html
 # Custom NGINX config for port 8080 and React routing
 COPY nginx-frontend.conf /etc/nginx/conf.d/default.conf
 # Explicitly expose port 8080 (optional but good practice)
 EXPOSE 8080
 ```
+- node:alpine → A minimal version of Node.js (~40MB), reducing image size.
+- AS builder → Creates a named build stage for a multi-stage build.
+- COPY package*.json ./ → Only copies package files first, helping Docker cache dependencies.
+- npm ci --silent → Installs dependencies cleanly (ensures exact versions). silent: Suppresses unnecessary output, making logs cleaner.
+- COPY . . → Copies the rest of the application files.
+- npm run build → Creates the production-ready static files in /app/build.
+
+Why This is Better
+✅ Uses lighter node:alpine.
+✅ Only production dependencies are installed, keeping it minimal.
+✅ No local node_modules copied, avoiding conflicts.
+✅ No npm start → Instead, directly starts with node server.js (faster & efficient).
+
+### Similarly for Backend
+
+```dockerfile
+# Stage 1: Install dependencies
+FROM node:16-alpine AS dependencies
+WORKDIR /backend
+COPY package*.json ./
+RUN npm ci --only=production --silent
+
+# Stage 2: Copy only production files
+FROM node:16-alpine
+WORKDIR /backend
+COPY --from=dependencies /backend/node_modules ./node_modules
+COPY . .
+CMD ["npm", "start"]
+```
+
 
 
 
