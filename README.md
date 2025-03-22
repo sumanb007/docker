@@ -361,10 +361,10 @@ EXPOSE 8080
 - npm run build → Creates the production-ready static files in /app/build.
 
 Why This is Better
-✅ Uses lighter node:alpine.
-✅ Only production dependencies are installed, keeping it minimal.
-✅ No local node_modules copied, avoiding conflicts.
-✅ No npm start → Instead, directly starts with node server.js (faster & efficient).
+- Uses lighter node:alpine.
+- Only production dependencies are installed, keeping it minimal.
+- No local node_modules copied, avoiding conflicts.
+- No npm start → Instead, directly starts with node server.js (faster & efficient).
 
 ### Similarly for Backend
 
