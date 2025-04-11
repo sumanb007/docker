@@ -2,9 +2,9 @@
 
 ## Table of Contents
 1. [Docker Private Repository](#docker-private-repository)
-2. [Before Pushing Images](#before-pushing-images)
+2. [Before Pushing Images To Private Repository](#before-pushing-images-to-private-repository)
 3. [Dockerfile and Multi Stage Build](#dockerfile-and-multi-stage-build)
-4. [Pushing Images](#pushing-images)
+4. [Pushing Images To Private Repository](#pushing-images-to-private-repository)
 
 ## Docker Private Repository
 
@@ -53,7 +53,7 @@ docker run -d -p 5050:5000 --restart unless-stopped --name local-docker-registry
 8. **`registry:2`**  
    - Specifies the **Docker image** to use (`registry:2` is the official **Docker Registry version 2**).
   
-## Before Pushing Images
+## Before Pushing Images To Private Repository
 
 When using images from a **local registry**, there are a few additional considerations to ensure smooth integration with Docker and Kubernetes.
 
@@ -395,7 +395,7 @@ Let's create image for this too.
 
 The size of the image is ~132MB.
 
-## Pushing Images
+## Pushing Images To Private Repository
 
 
 
