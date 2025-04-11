@@ -88,14 +88,54 @@ If your local registry does not use TLS (i.e., it's running over HTTP), you'll n
 - If you don’t have a certificate from a trusted CA, you can generate a **self-signed certificate** for your registry.
   You need an SSL certificate to enable HTTPS. You can either get one from a trusted CA (Let's Encrypt, etc.) or generate a self-signed certificate.
 
-   ```sh
+   ```bash
    mkdir -p /mnt/sdb2-partition/certs
+
+
+   cat > openssl.cnf <<EOF
+   [req]
+   distinguished_name = req_distinguished_name
+   x509_extensions = v3_req
+   prompt = no
    
-   openssl req -newkey rsa:4096 -nodes -sha256 -keyout /mnt/sdb2-partition/certs/domain.key \
-       -x509 -days 365 -out /mnt/sdb2-partition/certs/domain.crt \
-       -subj "/CN=$(hostname -I | awk '{print $1}')"
+   [req_distinguished_name]
+   C = US
+   ST = State
+   L = City
+   O = Organization
+   CN = 192.168.1.110
+   
+   [v3_req]
+   keyUsage = keyEncipherment, dataEncipherment
+   extendedKeyUsage = serverAuth
+   subjectAltName = @alt_names
+   
+   [alt_names]
+   IP.1 = 192.168.1.110
+   EOF
    ```
-   
+
+> [!IMPORTANT]
+> What It Does ?
+> - Uses the openssl.cnf file to define Subject Alternative Names (SANs) like IP.1 = 192.168.1.110.
+> - Includes the v3_req extension block to specify serverAuth and SANs explicitly.
+> - Creates a certificate that complies with modern TLS standards (required by Docker, browsers, etc.)
+>
+> Why It Works ?
+> - SANs are mandatory for certificates to be trusted by most tools today. Docker (and modern TLS validators) ignore the legacy CN field and only validate SANs.
+> - This avoids the x509: certificate relies on legacy Common Name error.What It Does
+> 
+
+Now generate the Certificate with SANs (Subject Alternative Names)
+
+   ```bash
+     openssl req -newkey rsa:4096 -nodes -sha256 \
+     -keyout /mnt/sdb2-partition/certs/domain.key \
+     -x509 -days 365 -out /mnt/sdb2-partition/certs/domain.crt \
+     -config /mnt/sdb2-partition/certs/openssl.cnf \
+     -extensions v3_req
+   ```
+
    This creates:
    
    - domain.key → Private key
