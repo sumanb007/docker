@@ -4,6 +4,7 @@
 1. [Docker Private Repository](#docker-private-repository)
 2. [Before Pushing Images](#before-pushing-images)
 3. [Dockerfile and Multi Stage Build](#dockerfile-and-multi-stage-build)
+4. [Pushing Images](#pushing-images)
 
 ## Docker Private Repository
 
@@ -308,7 +309,7 @@ A Docker multi-stage build is a technique used to create smaller and more effici
 ### Let's Continue
 
 Now we have three tier web application, frontend, backend and mongodb.
-We are are converting the traditional Dockerfile into optimized final image using multi-stage build.
+We are are defining the traditional Dockerfile into optimized final image using multi-stage build.
 
 Here, we have one Dockerfile for frontend.
 This is not ideal for long-term projects, but it works if you just need to install specific packages without setting up package.json.
@@ -334,7 +335,7 @@ CMD ["npm", "start"]
 ```
 
 For the frontend, a common practice is to build the application into static files and serve them with a lightweight web server (e.g., Nginx).
-Now lets convert alternative Dockerfile into multi-stage build. This will create ~54MB size.
+Now, lets define alternative Dockerfile into multi-stage build. This will create ~54MB size.
 ```dockerfile
 # Stage 1: Build the React app
 FROM node:16-alpine AS builder
@@ -366,6 +367,11 @@ Why This is Better
 - No local node_modules copied, avoiding conflicts.
 - No npm start → Instead, directly starts with node server.js (faster & efficient).
 
+Let's create image then.
+
+<img src="https://raw.githubusercontent.com/sumanb007/crud-webapplication/main/img/frontendImage.png" alt="frontendImage" width="800"/>
+
+
 ### Similarly for Backend
 
 ```dockerfile
@@ -383,7 +389,13 @@ COPY . .
 CMD ["npm", "start"]
 ```
 
+Let's create image for this too.
 
+<img src="https://raw.githubusercontent.com/sumanb007/crud-webapplication/main/img/backendImage.png" alt="backendImage" width="800"/>
+
+The size of the image is ~132MB.
+
+## Pushing Images
 
 
 
