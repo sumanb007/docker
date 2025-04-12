@@ -6,6 +6,7 @@
 3. [Dockerfile and Multi Stage Build](#dockerfile-and-multi-stage-build)
 4. [Pushing Images To Private Repository](#pushing-images-to-private-repository)
 
+
 ## Docker Private Repository
 
 A private Docker repository allows you to store and distribute Docker images securely within your infrastructure. Follow the steps below to set up a private Docker registry.
@@ -15,7 +16,7 @@ A private Docker repository allows you to store and distribute Docker images sec
 - Sufficient disk space to store images.  
 - A network-accessible host to serve the registry.  
 
-### Step 1: Start a Local Docker Registry
+###  Start a Local Docker Registry
 Run the following command to start a basic, insecure local registry on port 5000:
 
 ```sh
@@ -85,8 +86,8 @@ If your local registry does not use TLS (i.e., it's running over HTTP), you'll n
 
 ### 2. Alternative-2: Secure Registry Configuration
 
-- If you don’t have a certificate from a trusted CA, you can generate a **self-signed certificate** for your registry.
-  You need an SSL certificate to enable HTTPS. You can either get one from a trusted CA (Let's Encrypt, etc.) or generate a self-signed certificate.
+Step 1: If you don’t have a certificate from a trusted CA, you can generate a **self-signed certificate** for your registry.
+        You need an SSL certificate to enable HTTPS. You can either get one from a trusted CA (Let's Encrypt, etc.) or generate a self-signed certificate.
 
    ```bash
    mkdir -p /mnt/sdb2-partition/certs
@@ -115,6 +116,7 @@ If your local registry does not use TLS (i.e., it's running over HTTP), you'll n
    EOF
    ```
 
+
 > [!IMPORTANT]
 > What It Does ?
 > - Uses the openssl.cnf file to define Subject Alternative Names (SANs) like IP.1 = 192.168.1.110.
@@ -124,9 +126,16 @@ If your local registry does not use TLS (i.e., it's running over HTTP), you'll n
 > Why It Works ?
 > - SANs are mandatory for certificates to be trusted by most tools today. Docker (and modern TLS validators) ignore the legacy CN field and only validate SANs.
 > - This avoids the x509: certificate relies on legacy Common Name error.What It Does
-> 
+>
+> Alternatively, we can use command to create certificate below:
+> - openssl req -x509 -newkey rsa:2048 -nodes \
+  -keyout server.key -out server.crt \
+  -subj "/C=US/ST=State/L=City/O=Organization/CN=192.168.1.110" \
+  -addext "subjectAltName = IP:192.168.1.110" \
+  -days 365
+>
 
-Now generate the Certificate with SANs (Subject Alternative Names)
+Step 2: Now generate the Certificate with SANs (Subject Alternative Names)
 
    ```bash
      openssl req -newkey rsa:4096 -nodes -sha256 \
@@ -143,8 +152,7 @@ Now generate the Certificate with SANs (Subject Alternative Names)
 
      (Make sure to replace /mnt/sdb2-partition/certs with your preferred location.)
 
-- Run the Secure Docker Registry
-  Now, restart the registry with TLS enabled, using the same stored images directory.
+Step 3: Run the Secure Docker Registry with TLS enabled, using the stored images directory.
 
   ```sh
   docker run -d -p 5050:5000 --restart unless-stopped --name local-docker-registry \
@@ -155,34 +163,41 @@ Now generate the Certificate with SANs (Subject Alternative Names)
   -e REGISTRY_STORAGE_DELETE_ENABLED=true \
   registry:2
   ```
+
   This ensures:
   - The existing images are retained (/mnt/sdb2-partition/dockerImages remains unchanged).
   - The registry now runs with HTTPS instead of HTTP.
     
 
-### 3. Trust the Registry Certificate (On Clients)
+### 3. Trust the Registry with TLS (On Clients)
 
-- For Self-Signed Certificates (On Linux)
+- For Self-Signed Certificates
 
   In our case, since we switched to HTTPS, clients (your local machine, Kubernetes nodes, etc.) must trust the new certificate.
 
+  On Registry server
   ```sh
-  mkdir -p /etc/docker/certs.d/$(hostname -I | awk '{print $1}')
-  cp /mnt/sdb2-partition/certs/domain.crt /etc/docker/certs.d/$(hostname -I | awk '{print $1}')/ca.crt
+  mkdir -p /etc/docker/certs.d/$(hostname -I | awk '{print $1}'):5050
+  cp /mnt/sdb2-partition/certs/domain.crt /etc/docker/certs.d/$(hostname -I | awk '{print $1}'):5050/ca.crt
   ```
 
+  Confirm and set the proper permission.
+  ```bash
+  sudo chmod 644 /etc/docker/certs.d/$(hostname -I | awk '{print $1}'):5050/ca.crt
+  sudo chown root:root /etc/docker/certs.d/$(hostname -I | awk '{print $1}'):5050/ca.crt
+  ```
+  
   Then, restart Docker:
   ```
   sudo systemctl restart docker
   ```
 
-  If other machines are accessing the registry, copy domain.crt to each client and install it under /etc/docker/certs.d/<registry-ip>/ca.crt.
+- If other machines are accessing the registry, copy domain.crt to each client and install it under /etc/docker/certs.d/<registry-ip>/ca.crt.
 
   Since our Docker Registry is hosted on 192.168.1.110, and other hosts (192.168.1.11, 192.168.1.12, 192.168.1.13) need to access it securely.
   Follow these steps to distribute and trust the self-signed certificate on each client machine.
 
-  On the main registry host (192.168.1.110), run:
-
+  On the main registry host (192.168.1.110), copy the certificate to each clients:
   ```sh
   scp /mnt/sdb2-partition/certs/domain.crt user@192.168.1.11:/tmp/
   scp /mnt/sdb2-partition/certs/domain.crt user@192.168.1.12:/tmp/
@@ -193,17 +208,23 @@ Now generate the Certificate with SANs (Subject Alternative Names)
   SSH into each client (192.168.1.11, .12, .13) and move the certificate to the correct location:
 
   ```sh
-  sudo mkdir -p /etc/docker/certs.d/192.168.1.110
-  sudo mv /tmp/domain.crt /etc/docker/certs.d/192.168.1.110/ca.crt
+  sudo mkdir -p /etc/docker/certs.d/192.168.1.110:5050  # Include port
+  sudo mv /tmp/domain.crt /etc/docker/certs.d/192.168.1.110:5050/ca.crt
+  sudo chmod 644 /etc/docker/certs.d/192.168.1.110:5050/ca.crt
+  sudo chown root:root /etc/docker/certs.d/192.168.1.110:5050/ca.crt
   sudo systemctl restart docker
   ```
 
 - Test the Connection
+  - On the registry server, verify the certificate includes the correct IP:
+    ```bash
+    openssl x509 -in /mnt/sdb2-partition/certs/domain.crt -text -noout | grep -A1 "Subject Alternative Name"
+    ```
 
   - To verify that the registry is working, list available repositories before pulling an image.
 
     ```sh
-    curl -k https://192.168.1.110:5050/v2/_catalog
+    curl -vk https://192.168.1.110:5050/v2/_catalog
     ```
 
     Expected Output
@@ -244,6 +265,38 @@ Now generate the Certificate with SANs (Subject Alternative Names)
     ```sh
     HTTP/2 404
     ```
+
+  - Try deleting any image
+ 
+    Let's say we want to delete image with tag 'test'
+ 
+    ```sh
+    curl -k https://192.168.1.110:5050/v2/frontend-crud-webapp/tags/list
+    {"name":"frontend-crud-webapp","tags":["alpine","latest","minimal","test","v1","v2"]}
+    ```
+ 
+    Then, get the manifest’s digest for the tag "test". Use the following command:
+    ```sh
+    bsuman@masternode: ~$ curl -I -H "Accept: application/vnd.docker.distribution.manifest.v2+json" -k https://192.168.1.110:5050/v2/frontend-crud-webapp/manifests/test
+    HTTP/2 200 
+    content-type: application/vnd.docker.distribution.manifest.v2+json
+    docker-content-digest: sha256:3bed2237c25abefc076ea87f13a86f6490b2bfbecca43ab028bf2a7f88e9fc63
+    docker-distribution-api-version: registry/2.0
+    etag: "sha256:3bed2237c25abefc076ea87f13a86f6490b2bfbecca43ab028bf2a7f88e9fc63"
+    x-content-type-options: nosniff
+    content-length: 2406
+    date: Sat,
+    ```
+ 
+    In the response headers, look for the Docker-Content-Digest field. It will look similar to:
+    
+          docker-content-digest: sha256:3bed2237.....
+ 
+    Now, delete
+    ```sh
+    curl -X DELETE -k https://192.168.1.110:5050/v2/frontend-crud-webapp/manifests/sha256:3bed2237c25abefc076ea87f13a86f6490b2bfbecca43ab028bf2a7f88e9fc63
+    ```
+    
 
     You can further verify by pulling and pushing new images.
 
@@ -437,5 +490,12 @@ The size of the image is ~132MB.
 
 ## Pushing Images To Private Repository
 
+After creating the image like shown in above picuture, now tag the image and push it to repository
+
+Tag the Image with the Registry Address and the Desired Tag
+```sh
+docker tag frontend-crud-webapp:latest 192.168.1.110:5050/frontend-crud-webapp:test
+docker push 192.168.1.110:5050/frontend-crud-webapp:test
+```
 
 
