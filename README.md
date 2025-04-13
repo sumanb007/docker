@@ -494,8 +494,15 @@ After creating the image like shown in above picuture, now tag the image and pus
 
 Tag the Image with the Registry Address and the Desired Tag
 ```sh
+#frontend
+docker tag frontend-crud-webapp:latest 192.168.1.110:5050/frontend-crud-webapp:test
+docker push 192.168.1.110:5050/frontend-crud-webapp:test
+
+#backend
 docker tag frontend-crud-webapp:latest 192.168.1.110:5050/frontend-crud-webapp:test
 docker push 192.168.1.110:5050/frontend-crud-webapp:test
 ```
+
+<img src="https://raw.githubusercontent.com/sumanb007/crud-webapplication/main/img/imagesPush.png" alt="imagesPush" width="900">
 
 
