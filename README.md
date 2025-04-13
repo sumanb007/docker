@@ -117,7 +117,7 @@ Step 1: If you don’t have a certificate from a trusted CA, you can generate a 
    ```
 
 
-> [!IMPORTANT]
+> [!NOTE]
 > What It Does ?
 > - Uses the openssl.cnf file to define Subject Alternative Names (SANs) like IP.1 = 192.168.1.110.
 > - Includes the v3_req extension block to specify serverAuth and SANs explicitly.
@@ -390,7 +390,7 @@ A Docker multi-stage build is a technique used to create smaller and more effici
 - Improved Security 🔒 → Minimizes attack surface by removing build tools.
 - Better Performance 🚀 → Less bloat means faster deployment and startup times.
 
-> [!TIP]
+> [!NOTE]
 > When to Use Multi-Stage Builds?
 > - When your application requires compilation (Go, C, C++, Java, Rust).
 > - When using package managers (npm, pip, maven) and you don’t need dev (or build tools) dependencies in production.
